@@ -27,6 +27,11 @@ app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "controle-financeiro-secret")
 
+if DATABASE_URL.startswith("postgresql://"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {"sslmode": "require"}
+    }
+
 db = SQLAlchemy(app)
 
 
