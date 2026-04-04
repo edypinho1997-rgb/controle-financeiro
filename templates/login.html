@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login | Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="login-body">
+    <main class="login-shell">
+        <section class="login-card">
+            <p class="eyebrow">Controle Financeiro</p>
+            <h1>Entrar</h1>
+            <p class="hero-copy">Use seu usuario e senha para acessar o painel.</p>
+
+            {% with mensagens = get_flashed_messages() %}
+                {% if mensagens %}
+                    <div class="alert">
+                        {% for mensagem in mensagens %}
+                            <p>{{ mensagem }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form method="post" class="stack-form">
+                <label>
+                    <span>Usuario</span>
+                    <input type="text" name="usuario" placeholder="Seu usuario" required>
+                </label>
+                <label>
+                    <span>Senha</span>
+                    <input type="password" name="senha" placeholder="Sua senha" required>
+                </label>
+                <button type="submit" class="btn maria-btn">Entrar</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

@@ -3,12 +3,14 @@ import os
 import sqlite3
 from pathlib import Path
 
-from flask import Flask, g, redirect, render_template, request, url_for
+from flask import Flask, flash, g, redirect, render_template, request, session, url_for
 
 
 BASE_DIR = Path(__file__).resolve().parent
 JSON_PATH = BASE_DIR / "dados.json"
 DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", BASE_DIR / "financeiro_web.db"))
+LOGIN_USER = os.environ.get("LOGIN_USER", "edypinheiro")
+LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "controle123")
 
 TIPOS = {
     "entrada": "Entrada",
@@ -18,6 +20,7 @@ TIPOS = {
 
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "controle-financeiro-secret")
 
 
 def formatar_real(valor):
@@ -117,6 +120,13 @@ def preparar_banco():
     init_db()
     importar_json_se_necessario()
 
+    rotas_livres = {"login", "static"}
+    if request.endpoint in rotas_livres:
+        return
+
+    if not session.get("autenticado"):
+        return redirect(url_for("login"))
+
 
 def buscar_lancamentos():
     db = get_db()
@@ -168,6 +178,30 @@ def redirecionar_para(secao=None):
 @app.context_processor
 def inject_helpers():
     return {"formatar_real": formatar_real, "TIPOS": TIPOS}
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("autenticado"):
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        usuario = request.form.get("usuario", "").strip()
+        senha = request.form.get("senha", "")
+
+        if usuario == LOGIN_USER and senha == LOGIN_PASSWORD:
+            session["autenticado"] = True
+            return redirect(url_for("index"))
+
+        flash("Usuario ou senha invalidos.")
+
+    return render_template("login.html")
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.get("/")

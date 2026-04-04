@@ -15,6 +15,9 @@
                 <p class="hero-copy">Acompanhe entradas, saídas, investimentos e a lista da Maria Cecilia no navegador.</p>
             </div>
             <div class="saldo-card">
+                <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+                    <button type="submit" class="btn danger slim">Sair</button>
+                </form>
                 <span>Saldo atual</span>
                 <strong>{{ formatar_real(resumo.saldo) }}</strong>
                 <small>Entrada {{ formatar_real(resumo.entrada) }} | Saída {{ formatar_real(resumo.saida) }} | Invest. {{ formatar_real(resumo.investimento) }}</small>
