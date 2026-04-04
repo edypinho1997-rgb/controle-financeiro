@@ -2,8 +2,9 @@ services:
   - type: web
     name: controle-financeiro-web
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT wsgi:app
     envVars:
       - key: DATABASE_PATH
         value: /opt/render/project/src/financeiro_web.db
