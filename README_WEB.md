@@ -38,4 +38,4 @@ gunicorn --bind 0.0.0.0:$PORT wsgi:app
 
 ### Observação importante
 
-O banco atual é SQLite. Em plano grátis do Render, o sistema sobe, mas os dados locais podem ser perdidos em restart ou redeploy porque o filesystem é efêmero. Para uso estável, o próximo passo ideal é migrar para PostgreSQL.
+O app aceita `DATABASE_URL`. Sem essa variável, ele usa SQLite local. Para salvar de forma persistente online, configure um Postgres no Supabase e cole a connection string no Render como `DATABASE_URL`.

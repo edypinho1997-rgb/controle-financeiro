@@ -1,16 +1,9 @@
-import json
 import os
-import sqlite3
-from pathlib import Path
+from datetime import datetime
 
-from flask import Flask, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask_sqlalchemy import SQLAlchemy
 
-
-BASE_DIR = Path(__file__).resolve().parent
-JSON_PATH = BASE_DIR / "dados.json"
-DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", BASE_DIR / "financeiro_web.db"))
-LOGIN_USER = os.environ.get("LOGIN_USER", "edypinheiro")
-LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "controle123")
 
 TIPOS = {
     "entrada": "Entrada",
@@ -18,9 +11,60 @@ TIPOS = {
     "investimento": "Investimento",
 }
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+if not DATABASE_URL:
+    DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'financeiro_web.db')}"
+
+LOGIN_USER = os.environ.get("LOGIN_USER", "edypinheiro")
+LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "controle123")
+
 
 app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "controle-financeiro-secret")
+
+db = SQLAlchemy(app)
+
+
+class Lancamento(db.Model):
+    __tablename__ = "lancamentos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(30), nullable=False)
+    nome = db.Column(db.String(200), nullable=False)
+    data = db.Column(db.String(20), default="")
+    valor = db.Column(db.Float, nullable=False)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ItemMariaCecilia(db.Model):
+    __tablename__ = "maria_cecilia"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    valor = db.Column(db.Float, default=0, nullable=False)
+    comprado = db.Column(db.Boolean, default=False, nullable=False)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+with app.app_context():
+    db.create_all()
+
+    inspector = db.inspect(db.engine)
+
+    colunas_lancamentos = {coluna["name"] for coluna in inspector.get_columns("lancamentos")} if inspector.has_table("lancamentos") else set()
+    if "criado_em" not in colunas_lancamentos:
+        db.session.execute(db.text("ALTER TABLE lancamentos ADD COLUMN criado_em DATETIME"))
+        db.session.commit()
+
+    colunas_maria = {coluna["name"] for coluna in inspector.get_columns("maria_cecilia")} if inspector.has_table("maria_cecilia") else set()
+    if "criado_em" not in colunas_maria:
+        db.session.execute(db.text("ALTER TABLE maria_cecilia ADD COLUMN criado_em DATETIME"))
+        db.session.commit()
 
 
 def formatar_real(valor):
@@ -37,89 +81,8 @@ def ler_valor(texto):
     return float(texto)
 
 
-def get_db():
-    if "db" not in g:
-        g.db = sqlite3.connect(DATABASE_PATH)
-        g.db.row_factory = sqlite3.Row
-    return g.db
-
-
-@app.teardown_appcontext
-def close_db(exception):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
-
-
-def init_db():
-    db = get_db()
-    db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS lancamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tipo TEXT NOT NULL,
-            nome TEXT NOT NULL,
-            data TEXT DEFAULT '',
-            valor REAL NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS maria_cecilia (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            valor REAL NOT NULL DEFAULT 0,
-            comprado INTEGER NOT NULL DEFAULT 0
-        );
-        """
-    )
-    db.commit()
-
-
-with app.app_context():
-    init_db()
-
-
-def importar_json_se_necessario():
-    db = get_db()
-    total_lancamentos = db.execute("SELECT COUNT(*) FROM lancamentos").fetchone()[0]
-    total_maria = db.execute("SELECT COUNT(*) FROM maria_cecilia").fetchone()[0]
-    if total_lancamentos or total_maria or not JSON_PATH.exists():
-        return
-
-    try:
-        with JSON_PATH.open("r", encoding="utf-8") as arquivo:
-            data = json.load(arquivo)
-    except (json.JSONDecodeError, OSError):
-        return
-
-    for item in data.get("dados", []):
-        db.execute(
-            "INSERT INTO lancamentos (tipo, nome, data, valor) VALUES (?, ?, ?, ?)",
-            (
-                item.get("tipo", ""),
-                item.get("nome", ""),
-                item.get("data", ""),
-                float(item.get("valor", 0)),
-            ),
-        )
-
-    for item in data.get("maria_cecilia", []):
-        db.execute(
-            "INSERT INTO maria_cecilia (nome, valor, comprado) VALUES (?, ?, ?)",
-            (
-                item.get("nome", ""),
-                float(item.get("valor", 0)),
-                1 if item.get("comprado") else 0,
-            ),
-        )
-
-    db.commit()
-
-
 @app.before_request
-def preparar_banco():
-    init_db()
-    importar_json_se_necessario()
-
+def exigir_login():
     rotas_livres = {"login", "static"}
     if request.endpoint in rotas_livres:
         return
@@ -128,28 +91,16 @@ def preparar_banco():
         return redirect(url_for("login"))
 
 
-def buscar_lancamentos():
-    db = get_db()
-    return db.execute(
-        "SELECT id, tipo, nome, data, valor FROM lancamentos ORDER BY id DESC"
-    ).fetchall()
-
-
-def buscar_itens_maria():
-    db = get_db()
-    return db.execute(
-        "SELECT id, nome, valor, comprado FROM maria_cecilia ORDER BY id DESC"
-    ).fetchall()
-
-
 def calcular_resumo():
-    db = get_db()
     totais = {tipo: 0.0 for tipo in TIPOS}
+    resultados = (
+        db.session.query(Lancamento.tipo, db.func.coalesce(db.func.sum(Lancamento.valor), 0))
+        .group_by(Lancamento.tipo)
+        .all()
+    )
 
-    for linha in db.execute(
-        "SELECT tipo, COALESCE(SUM(valor), 0) AS total FROM lancamentos GROUP BY tipo"
-    ).fetchall():
-        totais[linha["tipo"]] = float(linha["total"] or 0)
+    for tipo, total in resultados:
+        totais[tipo] = float(total or 0)
 
     entrada = totais["entrada"]
     saida = totais["saida"]
@@ -207,9 +158,9 @@ def logout():
 @app.get("/")
 def index():
     resumo = calcular_resumo()
-    historico = buscar_lancamentos()
-    itens_maria = buscar_itens_maria()
-    maria_total = sum(float(item["valor"] or 0) for item in itens_maria)
+    historico = Lancamento.query.order_by(Lancamento.id.desc()).all()
+    itens_maria = ItemMariaCecilia.query.order_by(ItemMariaCecilia.id.desc()).all()
+    maria_total = sum(float(item.valor or 0) for item in itens_maria)
 
     return render_template(
         "index.html",
@@ -233,20 +184,16 @@ def adicionar_lancamento():
     if not nome or valor <= 0:
         return redirecionar_para(tipo)
 
-    db = get_db()
-    db.execute(
-        "INSERT INTO lancamentos (tipo, nome, data, valor) VALUES (?, ?, ?, ?)",
-        (tipo, nome, data_texto, valor),
-    )
-    db.commit()
+    db.session.add(Lancamento(tipo=tipo, nome=nome, data=data_texto, valor=valor))
+    db.session.commit()
     return redirecionar_para(tipo)
 
 
 @app.post("/lancamentos/<int:item_id>/apagar")
 def apagar_lancamento(item_id):
-    db = get_db()
-    db.execute("DELETE FROM lancamentos WHERE id = ?", (item_id,))
-    db.commit()
+    item = Lancamento.query.get_or_404(item_id)
+    db.session.delete(item)
+    db.session.commit()
     return redirecionar_para("historico")
 
 
@@ -256,34 +203,25 @@ def adicionar_item_maria():
     if not nome:
         return redirecionar_para("maria")
 
-    db = get_db()
-    db.execute(
-        "INSERT INTO maria_cecilia (nome, valor, comprado) VALUES (?, 0, 0)",
-        (nome,),
-    )
-    db.commit()
+    db.session.add(ItemMariaCecilia(nome=nome, valor=0, comprado=False))
+    db.session.commit()
     return redirecionar_para("maria")
 
 
 @app.post("/maria/<int:item_id>/apagar")
 def apagar_item_maria(item_id):
-    db = get_db()
-    db.execute("DELETE FROM maria_cecilia WHERE id = ?", (item_id,))
-    db.commit()
+    item = ItemMariaCecilia.query.get_or_404(item_id)
+    db.session.delete(item)
+    db.session.commit()
     return redirecionar_para("maria")
 
 
 @app.post("/maria/<int:item_id>/atualizar")
 def atualizar_item_maria(item_id):
-    valor = ler_valor(request.form.get("valor", "0"))
-    comprado = 1 if request.form.get("comprado") == "on" else 0
-
-    db = get_db()
-    db.execute(
-        "UPDATE maria_cecilia SET valor = ?, comprado = ? WHERE id = ?",
-        (valor, comprado, item_id),
-    )
-    db.commit()
+    item = ItemMariaCecilia.query.get_or_404(item_id)
+    item.valor = ler_valor(request.form.get("valor", "0"))
+    item.comprado = request.form.get("comprado") == "on"
+    db.session.commit()
     return redirecionar_para("maria")
 
 

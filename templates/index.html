@@ -79,12 +79,12 @@
                         {% for item in historico %}
                         <div class="history-item">
                             <div>
-                                <strong>{{ item["nome"] }}</strong>
-                                <p>{{ TIPOS[item["tipo"]] }}{% if item["data"] %} • {{ item["data"] }}{% endif %}</p>
+                                <strong>{{ item.nome }}</strong>
+                                <p>{{ TIPOS[item.tipo] }}{% if item.data %} • {{ item.data }}{% endif %}</p>
                             </div>
                             <div class="history-actions">
-                                <span>{{ formatar_real(item["valor"]) }}</span>
-                                <form method="post" action="{{ url_for('apagar_lancamento', item_id=item['id']) }}">
+                                <span>{{ formatar_real(item.valor) }}</span>
+                                <form method="post" action="{{ url_for('apagar_lancamento', item_id=item.id) }}">
                                     <button type="submit" class="btn danger slim">Excluir</button>
                                 </form>
                             </div>
@@ -113,20 +113,20 @@
                 <div class="maria-list">
                     {% if itens_maria %}
                         {% for item in itens_maria %}
-                        <form method="post" action="{{ url_for('atualizar_item_maria', item_id=item['id']) }}" class="maria-item">
+                        <form method="post" action="{{ url_for('atualizar_item_maria', item_id=item.id) }}" class="maria-item">
                             <div class="maria-item-top">
-                                <strong>{{ item["nome"] }}</strong>
+                                <strong>{{ item.nome }}</strong>
                                 <div class="maria-item-actions">
                                     <label class="checkline">
-                                        <input type="checkbox" name="comprado" {% if item["comprado"] %}checked{% endif %}>
+                                        <input type="checkbox" name="comprado" {% if item.comprado %}checked{% endif %}>
                                         <span>Comprado</span>
                                     </label>
                                     <button type="submit" class="btn slim">Salvar</button>
                                 </div>
                             </div>
                             <div class="maria-item-bottom">
-                                <input type="text" name="valor" value="{% if item['valor'] %}{{ '%.2f'|format(item['valor']) }}{% endif %}" placeholder="Valor">
-                                <button type="submit" class="btn danger slim" formaction="{{ url_for('apagar_item_maria', item_id=item['id']) }}">Remover</button>
+                                <input type="text" name="valor" value="{% if item.valor %}{{ '%.2f'|format(item.valor) }}{% endif %}" placeholder="Valor">
+                                <button type="submit" class="btn danger slim" formaction="{{ url_for('apagar_item_maria', item_id=item.id) }}">Remover</button>
                             </div>
                         </form>
                         {% endfor %}
