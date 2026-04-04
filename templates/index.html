@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Controle Financeiro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="page" id="topo">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Controle Financeiro</p>
+                <h1>Seu painel na web</h1>
+                <p class="hero-copy">Acompanhe entradas, saídas, investimentos e a lista da Maria Cecilia no navegador.</p>
+            </div>
+            <div class="saldo-card">
+                <span>Saldo atual</span>
+                <strong>{{ formatar_real(resumo.saldo) }}</strong>
+                <small>Entrada {{ formatar_real(resumo.entrada) }} | Saída {{ formatar_real(resumo.saida) }} | Invest. {{ formatar_real(resumo.investimento) }}</small>
+            </div>
+        </header>
+
+        <section class="summary-grid">
+            <article class="summary-box green">
+                <span>Disponível</span>
+                <strong>{{ resumo.percentual_livre|round(0)|int }}%</strong>
+                <small>{{ formatar_real(resumo.saldo) }}</small>
+            </article>
+            <article class="summary-box red">
+                <span>Saída</span>
+                <strong>{{ resumo.percentual_saida|round(0)|int }}%</strong>
+                <small>{{ formatar_real(resumo.saida) }}</small>
+            </article>
+            <article class="summary-box blue">
+                <span>Investimento</span>
+                <strong>{{ resumo.percentual_investimento|round(0)|int }}%</strong>
+                <small>{{ formatar_real(resumo.investimento) }}</small>
+            </article>
+        </section>
+
+        <section class="form-grid">
+            {% for tipo in ["entrada", "saida", "investimento"] %}
+            <article class="panel" id="{{ tipo }}">
+                <div class="panel-title">
+                    <h2>{{ TIPOS[tipo] }}</h2>
+                </div>
+                <form method="post" action="{{ url_for('adicionar_lancamento') }}" class="stack-form">
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+                    <label>
+                        <span>Nome</span>
+                        <input type="text" name="nome" placeholder="Ex.: salário" required>
+                    </label>
+                    <label>
+                        <span>Data</span>
+                        <input type="text" name="data" placeholder="dd/mm/aaaa">
+                    </label>
+                    <label>
+                        <span>Valor</span>
+                        <input type="text" name="valor" placeholder="0,00" required>
+                    </label>
+                    <button type="submit" class="btn {{ tipo }}">Adicionar {{ TIPOS[tipo] }}</button>
+                </form>
+            </article>
+            {% endfor %}
+        </section>
+
+        <section class="two-column">
+            <article class="panel" id="historico">
+                <div class="panel-title">
+                    <h2>Histórico</h2>
+                    <span>{{ historico|length }} lançamentos</span>
+                </div>
+                <div class="history-list">
+                    {% if historico %}
+                        {% for item in historico %}
+                        <div class="history-item">
+                            <div>
+                                <strong>{{ item["nome"] }}</strong>
+                                <p>{{ TIPOS[item["tipo"]] }}{% if item["data"] %} • {{ item["data"] }}{% endif %}</p>
+                            </div>
+                            <div class="history-actions">
+                                <span>{{ formatar_real(item["valor"]) }}</span>
+                                <form method="post" action="{{ url_for('apagar_lancamento', item_id=item['id']) }}">
+                                    <button type="submit" class="btn danger slim">Excluir</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="empty-state">Nenhum lançamento cadastrado ainda.</p>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="panel maria" id="maria">
+                <div class="panel-title">
+                    <div>
+                        <h2>Maria Cecilia</h2>
+                        <span>Total planejado {{ formatar_real(maria_total) }}</span>
+                    </div>
+                </div>
+                <form method="post" action="{{ url_for('adicionar_item_maria') }}" class="maria-form">
+                    <label>
+                        <span>Compra</span>
+                        <input type="text" name="nome" placeholder="Ex.: fralda de pano" required>
+                    </label>
+                    <button type="submit" class="btn maria-btn">Adicionar compra</button>
+                </form>
+                <div class="maria-list">
+                    {% if itens_maria %}
+                        {% for item in itens_maria %}
+                        <form method="post" action="{{ url_for('atualizar_item_maria', item_id=item['id']) }}" class="maria-item">
+                            <div class="maria-item-top">
+                                <strong>{{ item["nome"] }}</strong>
+                                <div class="maria-item-actions">
+                                    <label class="checkline">
+                                        <input type="checkbox" name="comprado" {% if item["comprado"] %}checked{% endif %}>
+                                        <span>Comprado</span>
+                                    </label>
+                                    <button type="submit" class="btn slim">Salvar</button>
+                                </div>
+                            </div>
+                            <div class="maria-item-bottom">
+                                <input type="text" name="valor" value="{% if item['valor'] %}{{ '%.2f'|format(item['valor']) }}{% endif %}" placeholder="Valor">
+                                <button type="submit" class="btn danger slim" formaction="{{ url_for('apagar_item_maria', item_id=item['id']) }}">Remover</button>
+                            </div>
+                        </form>
+                        {% endfor %}
+                    {% else %}
+                        <p class="empty-state">Nenhuma compra planejada ainda.</p>
+                    {% endif %}
+                </div>
+            </article>
+        </section>
+    </div>
+</body>
+</html>

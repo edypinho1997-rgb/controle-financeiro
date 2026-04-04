@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+venv/
+.buildenv/
+.buildozer/
+bin/
+financeiro_web.db
+controlefinanceiro-*.apk
+dados.json
+financeiro.xlsx
