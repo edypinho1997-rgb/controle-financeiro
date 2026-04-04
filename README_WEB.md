@@ -3,7 +3,7 @@
 ## Rodar localmente
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-web.txt
 python app_web.py
 ```
 
