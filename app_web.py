@@ -1,8 +1,7 @@
 import os
-from datetime import datetime
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
-from flask_sqlalchemy import SQLAlchemy
+from supabase import create_client
 
 
 TIPOS = {
@@ -11,65 +10,16 @@ TIPOS = {
     "investimento": "Investimento",
 }
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-if not DATABASE_URL:
-    DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'financeiro_web.db')}"
-
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ihabovtuabftonodxoqv.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_Wg-oqkTtUNv814BF2lAu_g_8MHA1sId")
 LOGIN_USER = os.environ.get("LOGIN_USER", "edypinheiro")
 LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "controle123")
-
+LANCAMENTOS_TABLE = "lancamentos"
+MARIA_TABLE = "maria_cecilia"
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "controle-financeiro-secret")
-
-if DATABASE_URL.startswith("postgresql://"):
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "connect_args": {"sslmode": "require"}
-    }
-
-db = SQLAlchemy(app)
-
-
-class Lancamento(db.Model):
-    __tablename__ = "lancamentos"
-
-    id = db.Column(db.Integer, primary_key=True)
-    tipo = db.Column(db.String(30), nullable=False)
-    nome = db.Column(db.String(200), nullable=False)
-    data = db.Column(db.String(20), default="")
-    valor = db.Column(db.Float, nullable=False)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-
-
-class ItemMariaCecilia(db.Model):
-    __tablename__ = "maria_cecilia"
-
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(200), nullable=False)
-    valor = db.Column(db.Float, default=0, nullable=False)
-    comprado = db.Column(db.Boolean, default=False, nullable=False)
-    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-
-
-with app.app_context():
-    db.create_all()
-
-    inspector = db.inspect(db.engine)
-
-    colunas_lancamentos = {coluna["name"] for coluna in inspector.get_columns("lancamentos")} if inspector.has_table("lancamentos") else set()
-    if "criado_em" not in colunas_lancamentos:
-        db.session.execute(db.text("ALTER TABLE lancamentos ADD COLUMN criado_em DATETIME"))
-        db.session.commit()
-
-    colunas_maria = {coluna["name"] for coluna in inspector.get_columns("maria_cecilia")} if inspector.has_table("maria_cecilia") else set()
-    if "criado_em" not in colunas_maria:
-        db.session.execute(db.text("ALTER TABLE maria_cecilia ADD COLUMN criado_em DATETIME"))
-        db.session.commit()
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def formatar_real(valor):
@@ -86,26 +36,48 @@ def ler_valor(texto):
     return float(texto)
 
 
-@app.before_request
-def exigir_login():
-    rotas_livres = {"login", "static"}
-    if request.endpoint in rotas_livres:
-        return
-
-    if not session.get("autenticado"):
-        return redirect(url_for("login"))
+def redirecionar_para(secao=None):
+    destino = url_for("index")
+    if secao:
+        destino = f"{destino}#{secao}"
+    return redirect(destino)
 
 
-def calcular_resumo():
+def buscar_lancamentos():
+    try:
+        resposta = (
+            supabase.table(LANCAMENTOS_TABLE)
+            .select("id,tipo,nome,data,valor")
+            .order("id", desc=True)
+            .execute()
+        )
+        return resposta.data or []
+    except Exception as e:
+        print("Erro ao buscar lancamentos:", e)
+        return []
+
+
+def buscar_itens_maria():
+    try:
+        resposta = (
+            supabase.table(MARIA_TABLE)
+            .select("id,nome,valor,comprado")
+            .order("id", desc=True)
+            .execute()
+        )
+        return resposta.data or []
+    except Exception as e:
+        print("Erro ao buscar Maria Cecilia:", e)
+        return []
+
+
+def calcular_resumo(historico):
     totais = {tipo: 0.0 for tipo in TIPOS}
-    resultados = (
-        db.session.query(Lancamento.tipo, db.func.coalesce(db.func.sum(Lancamento.valor), 0))
-        .group_by(Lancamento.tipo)
-        .all()
-    )
 
-    for tipo, total in resultados:
-        totais[tipo] = float(total or 0)
+    for item in historico:
+        tipo = item.get("tipo", "")
+        if tipo in totais:
+            totais[tipo] += float(item.get("valor", 0) or 0)
 
     entrada = totais["entrada"]
     saida = totais["saida"]
@@ -124,11 +96,14 @@ def calcular_resumo():
     }
 
 
-def redirecionar_para(secao=None):
-    destino = url_for("index")
-    if secao:
-        destino = f"{destino}#{secao}"
-    return redirect(destino)
+@app.before_request
+def exigir_login():
+    rotas_livres = {"login", "static"}
+    if request.endpoint in rotas_livres:
+        return
+
+    if not session.get("autenticado"):
+        return redirect(url_for("login"))
 
 
 @app.context_processor
@@ -162,10 +137,10 @@ def logout():
 
 @app.get("/")
 def index():
-    resumo = calcular_resumo()
-    historico = Lancamento.query.order_by(Lancamento.id.desc()).all()
-    itens_maria = ItemMariaCecilia.query.order_by(ItemMariaCecilia.id.desc()).all()
-    maria_total = sum(float(item.valor or 0) for item in itens_maria)
+    historico = buscar_lancamentos()
+    resumo = calcular_resumo(historico)
+    itens_maria = buscar_itens_maria()
+    maria_total = sum(float(item.get("valor", 0) or 0) for item in itens_maria)
 
     return render_template(
         "index.html",
@@ -189,16 +164,27 @@ def adicionar_lancamento():
     if not nome or valor <= 0:
         return redirecionar_para(tipo)
 
-    db.session.add(Lancamento(tipo=tipo, nome=nome, data=data_texto, valor=valor))
-    db.session.commit()
+    try:
+        supabase.table(LANCAMENTOS_TABLE).insert({
+            "tipo": tipo,
+            "nome": nome,
+            "data": data_texto,
+            "valor": valor,
+        }).execute()
+    except Exception as e:
+        print("Erro ao salvar lancamento:", e)
+        flash("Nao foi possivel salvar no Supabase.")
+
     return redirecionar_para(tipo)
 
 
 @app.post("/lancamentos/<int:item_id>/apagar")
 def apagar_lancamento(item_id):
-    item = Lancamento.query.get_or_404(item_id)
-    db.session.delete(item)
-    db.session.commit()
+    try:
+        supabase.table(LANCAMENTOS_TABLE).delete().eq("id", item_id).execute()
+    except Exception as e:
+        print("Erro ao apagar lancamento:", e)
+        flash("Nao foi possivel apagar no Supabase.")
     return redirecionar_para("historico")
 
 
@@ -208,25 +194,39 @@ def adicionar_item_maria():
     if not nome:
         return redirecionar_para("maria")
 
-    db.session.add(ItemMariaCecilia(nome=nome, valor=0, comprado=False))
-    db.session.commit()
+    try:
+        supabase.table(MARIA_TABLE).insert({
+            "nome": nome,
+            "valor": 0,
+            "comprado": False,
+        }).execute()
+    except Exception as e:
+        print("Erro ao adicionar item Maria Cecilia:", e)
+        flash("Crie a tabela maria_cecilia no Supabase para usar essa aba.")
+
     return redirecionar_para("maria")
 
 
 @app.post("/maria/<int:item_id>/apagar")
 def apagar_item_maria(item_id):
-    item = ItemMariaCecilia.query.get_or_404(item_id)
-    db.session.delete(item)
-    db.session.commit()
+    try:
+        supabase.table(MARIA_TABLE).delete().eq("id", item_id).execute()
+    except Exception as e:
+        print("Erro ao apagar item Maria Cecilia:", e)
+        flash("Nao foi possivel apagar na Maria Cecilia.")
     return redirecionar_para("maria")
 
 
 @app.post("/maria/<int:item_id>/atualizar")
 def atualizar_item_maria(item_id):
-    item = ItemMariaCecilia.query.get_or_404(item_id)
-    item.valor = ler_valor(request.form.get("valor", "0"))
-    item.comprado = request.form.get("comprado") == "on"
-    db.session.commit()
+    try:
+        supabase.table(MARIA_TABLE).update({
+            "valor": ler_valor(request.form.get("valor", "0")),
+            "comprado": request.form.get("comprado") == "on",
+        }).eq("id", item_id).execute()
+    except Exception as e:
+        print("Erro ao atualizar item Maria Cecilia:", e)
+        flash("Nao foi possivel atualizar a Maria Cecilia.")
     return redirecionar_para("maria")
 
 

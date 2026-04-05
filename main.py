@@ -2,6 +2,8 @@ import json
 import os
 from functools import partial
 
+from supabase import create_client
+
 from kivymd.app import MDApp
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
@@ -27,10 +29,67 @@ AZUL = (0.2, 0.6, 0.9, 1)
 BRANCO = (1, 1, 1, 1)
 ROSA = (0.95, 0.62, 0.78, 1)
 LARGURA_MOBILE = 500
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ihabovtuabftonodxoqv.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_publishable_Wg-oqkTtUNv814BF2lAu_g_8MHA1sId")
+SUPABASE_TABLE = "lancamentos"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def formatar_real(valor):
     return f"R${valor:.2f}"
+
+
+def salvar_lancamento_supabase(tipo, nome, data, valor):
+    try:
+        resposta = (
+            supabase.table(SUPABASE_TABLE)
+            .insert({
+                "tipo": tipo,
+                "nome": nome,
+                "data": data,
+                "valor": valor
+            })
+            .execute()
+        )
+        if resposta.data:
+            return resposta.data[0].get("id")
+    except Exception as e:
+        print("Erro Supabase:", e)
+    return None
+
+
+def apagar_lancamento_supabase(item_id):
+    if not item_id:
+        return
+
+    try:
+        supabase.table(SUPABASE_TABLE).delete().eq("id", item_id).execute()
+    except Exception as e:
+        print("Erro ao apagar no Supabase:", e)
+
+
+def carregar_lancamentos_supabase():
+    try:
+        resposta = (
+            supabase.table(SUPABASE_TABLE)
+            .select("id,tipo,nome,data,valor")
+            .order("id")
+            .execute()
+        )
+        return [
+            {
+                "id": item.get("id"),
+                "tipo": item.get("tipo", ""),
+                "nome": item.get("nome", ""),
+                "data": item.get("data", ""),
+                "valor": float(item.get("valor", 0) or 0),
+            }
+            for item in (resposta.data or [])
+        ]
+    except Exception as e:
+        print("Erro ao carregar Supabase:", e)
+        return None
 
 
 def ler_valor(texto):
@@ -277,10 +336,12 @@ class TelaPrincipal(Screen):
             }, f)
 
     def carregar_dados(self):
+        dados_local = None
         if os.path.exists(self.arquivo):
             try:
                 with open(self.arquivo, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    dados_local = data
                     self.entrada = data.get("entrada", 0)
                     self.saida = data.get("saida", 0)
                     self.investimento = data.get("investimento", 0)
@@ -292,6 +353,15 @@ class TelaPrincipal(Screen):
                 self.investimento = 0
                 self.dados = []
                 self.maria_cecilia = []
+
+        dados_supabase = carregar_lancamentos_supabase()
+        if dados_supabase:
+            self.dados = dados_supabase
+            self.entrada = sum(item["valor"] for item in self.dados if item["tipo"] == "entrada")
+            self.saida = sum(item["valor"] for item in self.dados if item["tipo"] == "saida")
+            self.investimento = sum(item["valor"] for item in self.dados if item["tipo"] == "investimento")
+            if dados_local is not None:
+                self.maria_cecilia = dados_local.get("maria_cecilia", [])
 
     def atualizar(self):
         total = self.entrada if self.entrada > 0 else 1
@@ -323,56 +393,68 @@ class TelaPrincipal(Screen):
     def add_entrada(self, instance):
         if self.valor_entrada.text:
             valor = float(self.valor_entrada.text)
+            nome = self.nome_entrada.text
+            data = self.data_entrada.text
 
             self.entrada += valor
             self.dados.append({
+                "id": None,
                 "tipo": "entrada",
-                "nome": self.nome_entrada.text,
-                "data": self.data_entrada.text,
+                "nome": nome,
+                "data": data,
                 "valor": valor
             })
-
             self.salvar_dados()
             self.nome_entrada.text = ""
             self.data_entrada.text = ""
             self.valor_entrada.text = ""
             self.atualizar()
+            self.dados[-1]["id"] = salvar_lancamento_supabase("entrada", nome, data, valor)
+            self.salvar_dados()
 
     def add_saida(self, instance):
         if self.valor_saida.text:
             valor = float(self.valor_saida.text)
+            nome = self.nome_saida.text
+            data = self.data_saida.text
 
             self.saida += valor
             self.dados.append({
+                "id": None,
                 "tipo": "saida",
-                "nome": self.nome_saida.text,
-                "data": self.data_saida.text,
+                "nome": nome,
+                "data": data,
                 "valor": valor
             })
-
             self.salvar_dados()
             self.nome_saida.text = ""
             self.data_saida.text = ""
             self.valor_saida.text = ""
             self.atualizar()
+            self.dados[-1]["id"] = salvar_lancamento_supabase("saida", nome, data, valor)
+            self.salvar_dados()
 
     def add_investimento(self, instance):
         if self.valor_investimento.text:
             valor = float(self.valor_investimento.text)
+            nome = self.nome_investimento.text
+            data = self.data_investimento.text
 
             self.investimento += valor
             self.dados.append({
+                "id": None,
                 "tipo": "investimento",
-                "nome": self.nome_investimento.text,
-                "data": self.data_investimento.text,
+                "nome": nome,
+                "data": data,
                 "valor": valor
             })
-
             self.salvar_dados()
             self.nome_investimento.text = ""
             self.data_investimento.text = ""
             self.valor_investimento.text = ""
             self.atualizar()
+            self.dados[-1]["id"] = salvar_lancamento_supabase("investimento", nome, data, valor)
+            self.salvar_dados()
 
     def ir_historico(self, instance):
         tela = self.manager.get_screen("historico")
@@ -513,6 +595,7 @@ class TelaHistorico(Screen):
         else:
             self.tela_principal.investimento -= item["valor"]
 
+        apagar_lancamento_supabase(item.get("id"))
         del self.tela_principal.dados[index]
 
         self.tela_principal.salvar_dados()

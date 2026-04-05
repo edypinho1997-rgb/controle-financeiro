@@ -4,3 +4,4 @@ openpyxl
 et_xmlfile
 flask
 gunicorn
+supabase
