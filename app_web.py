@@ -36,6 +36,14 @@ def ler_valor(texto):
     return float(texto)
 
 
+def normalizar_data(texto):
+    texto = (texto or "").strip()
+    if len(texto) == 10 and texto[4] == "-" and texto[7] == "-":
+        ano, mes, dia = texto.split("-")
+        return f"{dia}/{mes}/{ano}"
+    return texto
+
+
 def redirecionar_para(secao=None):
     destino = url_for("index")
     if secao:
@@ -96,6 +104,17 @@ def calcular_resumo(historico):
     }
 
 
+def montar_resumo_texto(resumo, historico, itens_maria):
+    return (
+        f"Entrada total de {formatar_real(resumo['entrada'])}, "
+        f"saidas em {formatar_real(resumo['saida'])}, "
+        f"investimentos em {formatar_real(resumo['investimento'])} "
+        f"e saldo atual de {formatar_real(resumo['saldo'])}. "
+        f"Voce tem {len(historico)} lancamentos no historico "
+        f"e {len(itens_maria)} itens planejados para Maria Cecilia."
+    )
+
+
 @app.before_request
 def exigir_login():
     rotas_livres = {"login", "static"}
@@ -141,6 +160,7 @@ def index():
     resumo = calcular_resumo(historico)
     itens_maria = buscar_itens_maria()
     maria_total = sum(float(item.get("valor", 0) or 0) for item in itens_maria)
+    resumo_texto = montar_resumo_texto(resumo, historico, itens_maria)
 
     return render_template(
         "index.html",
@@ -148,6 +168,7 @@ def index():
         historico=historico,
         itens_maria=itens_maria,
         maria_total=maria_total,
+        resumo_texto=resumo_texto,
     )
 
 
@@ -158,7 +179,7 @@ def adicionar_lancamento():
         return redirecionar_para("topo")
 
     nome = request.form.get("nome", "").strip()
-    data_texto = request.form.get("data", "").strip()
+    data_texto = normalizar_data(request.form.get("data", ""))
     valor = ler_valor(request.form.get("valor", "0"))
 
     if not nome or valor <= 0:

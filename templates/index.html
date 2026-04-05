@@ -13,6 +13,7 @@
                 <p class="eyebrow">Controle Financeiro</p>
                 <h1>Seu painel na web</h1>
                 <p class="hero-copy">Acompanhe entradas, saídas, investimentos e a lista da Maria Cecilia no navegador.</p>
+                <button type="button" class="btn summary-toggle" data-summary-toggle>Resumo de Tudo</button>
             </div>
             <div class="saldo-card">
                 <form method="post" action="{{ url_for('logout') }}" class="logout-form">
@@ -23,6 +24,54 @@
                 <small>Entrada {{ formatar_real(resumo.entrada) }} | Saída {{ formatar_real(resumo.saida) }} | Invest. {{ formatar_real(resumo.investimento) }}</small>
             </div>
         </header>
+
+        <section class="visual-grid">
+            <article class="panel chart-panel">
+                <div class="panel-title">
+                    <h2>Gráfico Geral</h2>
+                    <span>Entrada, consumo e investimento</span>
+                </div>
+                <div class="chart-wrap">
+                    <div class="donut-chart" style="--saida: {{ resumo.percentual_saida }}; --investimento: {{ resumo.percentual_investimento }};">
+                        <div class="donut-center">
+                            <strong>{{ formatar_real(resumo.saldo) }}</strong>
+                            <small>Saldo atual</small>
+                        </div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-item">
+                            <span class="legend-dot green"></span>
+                            <div>
+                                <strong>Entrada / Livre</strong>
+                                <small>{{ formatar_real(resumo.saldo) }} • {{ resumo.percentual_livre|round(0)|int }}%</small>
+                            </div>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot red"></span>
+                            <div>
+                                <strong>Consumo</strong>
+                                <small>{{ formatar_real(resumo.saida) }} • {{ resumo.percentual_saida|round(0)|int }}%</small>
+                            </div>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot blue"></span>
+                            <div>
+                                <strong>Investimento</strong>
+                                <small>{{ formatar_real(resumo.investimento) }} • {{ resumo.percentual_investimento|round(0)|int }}%</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel summary-panel hidden" id="resumo-geral">
+                <div class="panel-title">
+                    <h2>Resumo Geral</h2>
+                    <span>Visão rápida do período</span>
+                </div>
+                <p class="summary-copy">{{ resumo_texto }}</p>
+            </article>
+        </section>
 
         <section class="summary-grid">
             <article class="summary-box green">
@@ -56,7 +105,7 @@
                     </label>
                     <label>
                         <span>Data</span>
-                        <input type="text" name="data" placeholder="dd/mm/aaaa">
+                        <input type="date" name="data">
                     </label>
                     <label>
                         <span>Valor</span>
@@ -137,5 +186,16 @@
             </article>
         </section>
     </div>
+    <script>
+        const summaryButton = document.querySelector("[data-summary-toggle]");
+        const summaryPanel = document.querySelector("#resumo-geral");
+
+        if (summaryButton && summaryPanel) {
+            summaryButton.addEventListener("click", () => {
+                summaryPanel.classList.toggle("hidden");
+                summaryPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
+        }
+    </script>
 </body>
 </html>
