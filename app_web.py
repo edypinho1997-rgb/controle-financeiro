@@ -104,14 +104,17 @@ def calcular_resumo(historico):
     }
 
 
-def montar_resumo_texto(resumo, historico, itens_maria):
+def calcular_total_maria(itens_maria):
+    return sum(float(item.get("valor", 0) or 0) for item in itens_maria)
+
+
+def montar_resumo_texto(resumo, historico):
     return (
         f"Entrada total de {formatar_real(resumo['entrada'])}, "
         f"saidas em {formatar_real(resumo['saida'])}, "
         f"investimentos em {formatar_real(resumo['investimento'])} "
         f"e saldo atual de {formatar_real(resumo['saldo'])}. "
-        f"Voce tem {len(historico)} lancamentos no historico "
-        f"e {len(itens_maria)} itens planejados para Maria Cecilia."
+        f"Voce tem {len(historico)} lancamentos no historico."
     )
 
 
@@ -158,17 +161,23 @@ def logout():
 def index():
     historico = buscar_lancamentos()
     resumo = calcular_resumo(historico)
-    itens_maria = buscar_itens_maria()
-    maria_total = sum(float(item.get("valor", 0) or 0) for item in itens_maria)
-    resumo_texto = montar_resumo_texto(resumo, historico, itens_maria)
+    resumo_texto = montar_resumo_texto(resumo, historico)
 
     return render_template(
         "index.html",
         resumo=resumo,
         historico=historico,
-        itens_maria=itens_maria,
-        maria_total=maria_total,
         resumo_texto=resumo_texto,
+    )
+
+
+@app.get("/maria/fragment")
+def maria_fragment():
+    itens_maria = buscar_itens_maria()
+    return render_template(
+        "partials/maria_section.html",
+        itens_maria=itens_maria,
+        maria_total=calcular_total_maria(itens_maria),
     )
 
 

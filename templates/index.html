@@ -149,52 +149,91 @@
                 <div class="panel-title">
                     <div>
                         <h2>Maria Cecilia</h2>
-                        <span>Total planejado {{ formatar_real(maria_total) }}</span>
+                        <span>Carregada sob demanda para abrir mais rapido</span>
                     </div>
                 </div>
-                <form method="post" action="{{ url_for('adicionar_item_maria') }}" class="maria-form">
-                    <label>
-                        <span>Compra</span>
-                        <input type="text" name="nome" placeholder="Ex.: fralda de pano" required>
-                    </label>
-                    <button type="submit" class="btn maria-btn">Adicionar compra</button>
-                </form>
-                <div class="maria-list">
-                    {% if itens_maria %}
-                        {% for item in itens_maria %}
-                        <form method="post" action="{{ url_for('atualizar_item_maria', item_id=item.id) }}" class="maria-item">
-                            <div class="maria-item-top">
-                                <strong>{{ item.nome }}</strong>
-                                <div class="maria-item-actions">
-                                    <label class="checkline">
-                                        <input type="checkbox" name="comprado" {% if item.comprado %}checked{% endif %}>
-                                        <span>Comprado</span>
-                                    </label>
-                                    <button type="submit" class="btn slim">Salvar</button>
-                                </div>
-                            </div>
-                            <div class="maria-item-bottom">
-                                <input type="text" name="valor" value="{% if item.valor %}{{ '%.2f'|format(item.valor) }}{% endif %}" placeholder="Valor">
-                                <button type="submit" class="btn danger slim" formaction="{{ url_for('apagar_item_maria', item_id=item.id) }}">Remover</button>
-                            </div>
-                        </form>
-                        {% endfor %}
-                    {% else %}
-                        <p class="empty-state">Nenhuma compra planejada ainda.</p>
-                    {% endif %}
+                <div class="maria-loading" data-maria-placeholder>
+                    <p class="empty-state">Abra ou role ate esta secao para carregar os itens da Maria Cecilia.</p>
+                    <button type="button" class="btn maria-btn" data-load-maria>Carregar Maria Cecilia</button>
                 </div>
+                <div data-maria-content hidden></div>
             </article>
         </section>
     </div>
     <script>
         const summaryButton = document.querySelector("[data-summary-toggle]");
         const summaryPanel = document.querySelector("#resumo-geral");
+        const mariaPanel = document.querySelector("#maria");
+        const mariaContent = document.querySelector("[data-maria-content]");
+        const mariaPlaceholder = document.querySelector("[data-maria-placeholder]");
+        const mariaButton = document.querySelector("[data-load-maria]");
+        let mariaLoaded = false;
+        let mariaLoading = false;
 
         if (summaryButton && summaryPanel) {
             summaryButton.addEventListener("click", () => {
                 summaryPanel.classList.toggle("hidden");
                 summaryPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
             });
+        }
+
+        async function carregarMariaCecilia() {
+            if (!mariaPanel || !mariaContent || mariaLoaded || mariaLoading) {
+                return;
+            }
+
+            mariaLoading = true;
+            if (mariaPlaceholder) {
+                mariaPlaceholder.innerHTML = '<p class="empty-state">Carregando Maria Cecilia...</p>';
+            }
+
+            try {
+                const resposta = await fetch("{{ url_for('maria_fragment') }}", {
+                    headers: { "X-Requested-With": "fetch" }
+                });
+
+                if (!resposta.ok) {
+                    throw new Error("Falha ao carregar a secao");
+                }
+
+                mariaContent.innerHTML = await resposta.text();
+                mariaContent.hidden = false;
+                if (mariaPlaceholder) {
+                    mariaPlaceholder.hidden = true;
+                }
+                mariaLoaded = true;
+            } catch (error) {
+                if (mariaPlaceholder) {
+                    mariaPlaceholder.innerHTML = '<p class="empty-state">Nao foi possivel carregar a secao agora.</p><button type="button" class="btn maria-btn" data-load-maria>Tentar novamente</button>';
+                    const retryButton = mariaPlaceholder.querySelector("[data-load-maria]");
+                    if (retryButton) {
+                        retryButton.addEventListener("click", carregarMariaCecilia, { once: true });
+                    }
+                }
+            } finally {
+                mariaLoading = false;
+            }
+        }
+
+        if (mariaButton) {
+            mariaButton.addEventListener("click", carregarMariaCecilia);
+        }
+
+        if (mariaPanel && "IntersectionObserver" in window) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        carregarMariaCecilia();
+                        observer.disconnect();
+                    }
+                });
+            }, { rootMargin: "200px 0px" });
+
+            observer.observe(mariaPanel);
+        }
+
+        if (window.location.hash === "#maria") {
+            carregarMariaCecilia();
         }
     </script>
 </body>

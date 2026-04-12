@@ -1,0 +1,37 @@
+<div class="panel-title">
+    <div>
+        <h2>Maria Cecilia</h2>
+        <span>Total planejado {{ formatar_real(maria_total) }}</span>
+    </div>
+</div>
+<form method="post" action="{{ url_for('adicionar_item_maria') }}" class="maria-form">
+    <label>
+        <span>Compra</span>
+        <input type="text" name="nome" placeholder="Ex.: fralda de pano" required>
+    </label>
+    <button type="submit" class="btn maria-btn">Adicionar compra</button>
+</form>
+<div class="maria-list">
+    {% if itens_maria %}
+        {% for item in itens_maria %}
+        <form method="post" action="{{ url_for('atualizar_item_maria', item_id=item.id) }}" class="maria-item">
+            <div class="maria-item-top">
+                <strong>{{ item.nome }}</strong>
+                <div class="maria-item-actions">
+                    <label class="checkline">
+                        <input type="checkbox" name="comprado" {% if item.comprado %}checked{% endif %}>
+                        <span>Comprado</span>
+                    </label>
+                    <button type="submit" class="btn slim">Salvar</button>
+                </div>
+            </div>
+            <div class="maria-item-bottom">
+                <input type="text" name="valor" value="{% if item.valor %}{{ '%.2f'|format(item.valor) }}{% endif %}" placeholder="Valor">
+                <button type="submit" class="btn danger slim" formaction="{{ url_for('apagar_item_maria', item_id=item.id) }}">Remover</button>
+            </div>
+        </form>
+        {% endfor %}
+    {% else %}
+        <p class="empty-state">Nenhuma compra planejada ainda.</p>
+    {% endif %}
+</div>
