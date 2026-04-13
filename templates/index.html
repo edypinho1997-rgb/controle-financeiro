@@ -13,7 +13,10 @@
                 <p class="eyebrow">Controle Financeiro</p>
                 <h1>Seu painel na web</h1>
                 <p class="hero-copy">Acompanhe entradas, saídas, investimentos e a lista da Maria Cecilia no navegador.</p>
-                <button type="button" class="btn summary-toggle" data-summary-toggle>Resumo de Tudo</button>
+                <div class="hero-actions">
+                    <button type="button" class="btn summary-toggle" data-summary-toggle>Resumo de Tudo</button>
+                    <button type="button" class="btn quick-action" data-quick-today>Acao rapida de hoje</button>
+                </div>
             </div>
             <div class="saldo-card">
                 <form method="post" action="{{ url_for('logout') }}" class="logout-form">
@@ -99,13 +102,41 @@
                 </div>
                 <form method="post" action="{{ url_for('adicionar_lancamento') }}" class="stack-form">
                     <input type="hidden" name="tipo" value="{{ tipo }}">
+                    {% if tipo == "entrada" %}
+                    <label>
+                        <span>Selecao rapida</span>
+                        <select name="nome_rapido" data-quick-name-select data-target="entrada">
+                            <option value="">Escolha uma opcao</option>
+                            <option value="Clinica">Clinica</option>
+                            <option value="Domicilio">Domicilio</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </label>
+                    {% elif tipo == "saida" %}
+                    <label>
+                        <span>Selecao rapida</span>
+                        <select name="nome_rapido" data-quick-name-select data-target="saida">
+                            <option value="">Escolha uma opcao</option>
+                            <option value="Cartao">Cartao</option>
+                            <option value="Energia">Energia</option>
+                            <option value="Lazer">Lazer</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </label>
+                    {% endif %}
                     <label>
                         <span>Nome</span>
-                        <input type="text" name="nome" placeholder="Ex.: salário" required>
+                        <input
+                            type="text"
+                            name="nome"
+                            placeholder="Ex.: salário"
+                            required
+                            {% if tipo in ["entrada", "saida"] %}data-quick-name-input="{{ tipo }}"{% endif %}
+                        >
                     </label>
                     <label>
                         <span>Data</span>
-                        <input type="date" name="data">
+                        <input type="date" name="data" data-date-input>
                     </label>
                     <label>
                         <span>Valor</span>
@@ -167,6 +198,9 @@
         const mariaContent = document.querySelector("[data-maria-content]");
         const mariaPlaceholder = document.querySelector("[data-maria-placeholder]");
         const mariaButton = document.querySelector("[data-load-maria]");
+        const quickTodayButton = document.querySelector("[data-quick-today]");
+        const quickSelects = document.querySelectorAll("[data-quick-name-select]");
+        const dateInputs = document.querySelectorAll("[data-date-input]");
         let mariaLoaded = false;
         let mariaLoading = false;
 
@@ -235,6 +269,57 @@
         if (window.location.hash === "#maria") {
             carregarMariaCecilia();
         }
+
+        function preencherDataDeHoje() {
+            const agora = new Date();
+            const hoje = new Date(agora.getTime() - (agora.getTimezoneOffset() * 60000))
+                .toISOString()
+                .slice(0, 10);
+
+            dateInputs.forEach((input) => {
+                input.value = hoje;
+            });
+        }
+
+        quickSelects.forEach((select) => {
+            select.addEventListener("change", (event) => {
+                const tipo = event.target.dataset.target;
+                const input = document.querySelector(`[data-quick-name-input="${tipo}"]`);
+
+                if (!input) {
+                    return;
+                }
+
+                if (!event.target.value) {
+                    input.value = "";
+                    input.readOnly = false;
+                    input.placeholder = "Ex.: salário";
+                    return;
+                }
+
+                if (event.target.value === "Outros") {
+                    input.value = "";
+                    input.readOnly = false;
+                    input.placeholder = "Digite o nome";
+                    input.focus();
+                    return;
+                }
+
+                input.value = event.target.value;
+                input.readOnly = true;
+                input.placeholder = event.target.value;
+            });
+        });
+
+        if (quickTodayButton) {
+            quickTodayButton.addEventListener("click", () => {
+                preencherDataDeHoje();
+                document.querySelector("#entrada")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                document.querySelector('#entrada input[name="valor"]')?.focus();
+            });
+        }
+
+        preencherDataDeHoje();
     </script>
 </body>
 </html>

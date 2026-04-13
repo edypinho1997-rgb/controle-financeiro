@@ -171,10 +171,22 @@ label span,
     gap: 14px;
 }
 
-.summary-toggle {
+.hero-actions {
     margin-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.summary-toggle {
     width: fit-content;
     background: linear-gradient(135deg, #3f86ff, #76b4ff);
+}
+
+.quick-action {
+    width: fit-content;
+    background: linear-gradient(135deg, #12b981, #35d4a0);
+    color: #06261b;
 }
 
 label {
@@ -182,7 +194,8 @@ label {
     gap: 8px;
 }
 
-input {
+input,
+select {
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: var(--panel-soft);
@@ -192,7 +205,8 @@ input {
     font-size: 1rem;
 }
 
-input:focus {
+input:focus,
+select:focus {
     outline: 2px solid rgba(61, 156, 255, 0.35);
     border-color: rgba(61, 156, 255, 0.4);
 }
